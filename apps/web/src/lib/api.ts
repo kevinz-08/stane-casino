@@ -1,10 +1,18 @@
+import type { BlackjackEvent, BlackjackPlayerView } from '@casino/game-engine';
 import type {
+  ActiveBlackjackRoundDto,
   ApiErrorDto,
   AuthResponseDto,
+  BlackjackActionRequestDto,
+  BlackjackRoundDto,
   HealthResponseDto,
   LedgerHistoryDto,
   LoginRequestDto,
   RegisterRequestDto,
+  RotateSeedsResponseDto,
+  RoundHistoryDto,
+  SeedsDto,
+  StartBlackjackRequestDto,
   WalletBalanceDto,
 } from '@casino/shared';
 import { useSessionStore } from '@/stores/session.store';
@@ -105,6 +113,66 @@ export function getHistory(cursor?: string | null, limit = 20): Promise<LedgerHi
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
   return apiFetch<LedgerHistoryDto>(`/wallet/history?${params.toString()}`);
+}
+
+// --- blackjack / fairness / rounds ---------------------------------------------------------
+
+export type BlackjackRound = BlackjackRoundDto<BlackjackPlayerView, BlackjackEvent>;
+
+function adoptBalance<T extends { balance: string }>(dto: T): T {
+  useSessionStore.getState().setBalance(dto.balance);
+  return dto;
+}
+
+/** `idempotencyKey` must be reused when retrying the same click, so a retry never bets twice. */
+export async function startBlackjack(bet: string, idempotencyKey: string): Promise<BlackjackRound> {
+  return adoptBalance(
+    await apiFetch<BlackjackRound>('/blackjack/rounds', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({ bet } satisfies StartBlackjackRequestDto),
+    }),
+  );
+}
+
+export async function blackjackAction(
+  roundId: string,
+  body: BlackjackActionRequestDto,
+): Promise<BlackjackRound> {
+  return adoptBalance(
+    await apiFetch<BlackjackRound>(`/blackjack/rounds/${encodeURIComponent(roundId)}/actions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function getActiveBlackjack(): Promise<BlackjackRound | null> {
+  const res = await apiFetch<ActiveBlackjackRoundDto<BlackjackPlayerView>>(
+    '/blackjack/rounds/active',
+  );
+  return res.round ? adoptBalance(res.round as BlackjackRound) : null;
+}
+
+export function getBlackjackRound(roundId: string): Promise<BlackjackRound> {
+  return apiFetch<BlackjackRound>(`/blackjack/rounds/${encodeURIComponent(roundId)}`);
+}
+
+export function getRounds(cursor?: string | null, limit = 20): Promise<RoundHistoryDto> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return apiFetch<RoundHistoryDto>(`/rounds?${params.toString()}`);
+}
+
+export function getSeeds(): Promise<SeedsDto> {
+  return apiFetch<SeedsDto>('/fairness/seeds');
+}
+
+export function rotateSeeds(clientSeed?: string): Promise<RotateSeedsResponseDto> {
+  return apiFetch<RotateSeedsResponseDto>('/fairness/rotate', {
+    method: 'POST',
+    body: JSON.stringify(clientSeed ? { clientSeed } : {}),
+  });
 }
 
 export async function getHealth(): Promise<HealthResponseDto> {
