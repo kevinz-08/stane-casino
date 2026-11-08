@@ -13,7 +13,9 @@
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run",
+    "test:slow": "vitest run --config vitest.slow.config.ts",
+    "simulate:blackjack": "node scripts/simulate-blackjack.mjs"
   },
   "devDependencies": {
     "@casino/config": "workspace:*",

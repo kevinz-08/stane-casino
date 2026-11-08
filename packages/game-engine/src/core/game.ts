@@ -31,5 +31,5 @@ export interface Game<
   settle(state: TState): Settlement;
 }
 
-// TODO(phase-2): blackjack implements Game<...>
+// blackjack: see ../blackjack/engine.ts
 // TODO(phase-4): generic slot engine implements Game<...>

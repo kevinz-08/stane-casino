@@ -2,5 +2,5 @@
   "extends": "@casino/config/tsconfig.lib.json",
   "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": [] },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
 }
