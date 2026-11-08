@@ -1,6 +1,5 @@
 {
   "extends": "@casino/config/tsconfig.nest.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "dist"]
+  "compilerOptions": { "outDir": "dist", "rootDir": ".", "types": ["node"], "noEmit": true },
+  "include": ["src", "test", "vitest.config.ts", "vitest.integration.config.ts"]
 }

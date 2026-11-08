@@ -1,7 +1,11 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { APP_NAME } from '@casino/shared';
 import type { HealthResponseDto } from '@casino/shared';
+import { Public } from '../auth/auth.decorators';
 
+@Public()
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   @Get()

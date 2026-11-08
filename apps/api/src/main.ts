@@ -1,14 +1,17 @@
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { configureApp } from './app.setup';
+import { APP_CONFIG, type AppConfig } from './config/app-config';
+import { loadDotEnv } from './config/env-file';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000' });
-  // TODO(fase-1): global ValidationPipe, exception filter, helmet, rate limiting
-  const port = Number(process.env.API_PORT ?? 4000);
+  loadDotEnv();
+  const app = configureApp(await NestFactory.create(AppModule, { bufferLogs: true }));
+  const { port } = app.get<AppConfig>(APP_CONFIG);
   await app.listen(port);
-  console.log(`API listening on http://localhost:${port}`);
+  new Logger('Bootstrap').log(`API listening on http://localhost:${port}`);
 }
 
 void bootstrap();

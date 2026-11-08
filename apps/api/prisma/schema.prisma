@@ -1,5 +1,7 @@
-// Core data model only. No migrations or seeds yet (TODO(fase-1): first migration).
-// Chip amounts are BigInt (integer chips, never floats).
+// Core data model. Chip amounts are BigInt (integer chips, never floats).
+// Invariants Prisma cannot express (CHECKs, immutability triggers, balanced transactions,
+// system-account uniqueness) live in the SQL of the migrations: see
+// prisma/migrations/*_init/migration.sql.
 
 generator client {
   provider = "prisma-client-js"
@@ -16,14 +18,23 @@ enum Role {
 }
 
 enum AccountType {
-  PLAYER_WALLET // one per user
-  HOUSE // counterpart of every bet/payout
-  // TODO(fase-1): FAUCET / ADJUSTMENT accounts for chip grants
+  PLAYER_WALLET // one per user and currency; balance can never go below 0
+  HOUSE // system: counterpart of every bet/payout
+  FAUCET // system: issuer of chip grants (its balance goes negative = chips in circulation)
 }
 
+/// From the point of view of the account: DEBIT takes chips out, CREDIT puts chips in.
 enum LedgerDirection {
   DEBIT
   CREDIT
+}
+
+enum LedgerReason {
+  INITIAL_GRANT
+  BET
+  PAYOUT
+  REFUND
+  ADJUSTMENT
 }
 
 enum GameType {
@@ -45,53 +56,87 @@ enum SeedStatus {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
+  email        String   @unique // stored lower-cased
   passwordHash String
   displayName  String
   role         Role     @default(PLAYER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  accounts  Account[]
-  rounds    GameRound[]
-  seedPairs SeedPair[]
+  accounts      Account[]
+  rounds        GameRound[]
+  seedPairs     SeedPair[]
+  refreshTokens RefreshToken[]
+}
+
+/// Opaque refresh tokens (owned by `auth`). Only a SHA-256 of the secret is stored.
+/// Rotation: every refresh revokes the token and issues a new one in the same `familyId`.
+/// Presenting an already revoked token revokes the whole family (reuse detection).
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  familyId     String
+  tokenHash    String
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
 }
 
 model Account {
   id        String      @id @default(cuid())
-  userId    String? // null for system accounts (HOUSE)
+  userId    String? // null for system accounts (HOUSE, FAUCET)
   type      AccountType
   currency  String      @default("CHIP")
-  // Cached balance; the ledger is the source of truth and must always reconcile with it.
+  // Cached balance, updated in the same DB transaction as the entries. The ledger is the
+  // source of truth: balance == Σ CREDIT − Σ DEBIT of the account's entries.
   balance   BigInt      @default(0)
   createdAt DateTime    @default(now())
 
-  user    User?         @relation(fields: [userId], references: [id])
+  user    User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
   entries LedgerEntry[]
 
-  @@index([userId])
+  @@unique([userId, type, currency])
+}
+
+/// One business operation (a bet, a payout, a grant...). Immutable.
+/// `idempotencyKey` is unique: repeating an operation with the same key returns the original
+/// transaction; reusing the key with a different payload (`requestHash`) is rejected.
+model LedgerTransaction {
+  id             String       @id @default(cuid())
+  idempotencyKey String       @unique
+  requestHash    String
+  reason         LedgerReason
+  roundId        String?
+  createdAt      DateTime     @default(now())
+
+  round   GameRound?    @relation(fields: [roundId], references: [id], onDelete: Restrict)
+  entries LedgerEntry[]
+
+  @@index([roundId])
 }
 
 /// Immutable, append-only. One row per leg of a double-entry transaction:
-/// the legs of a transaction share `transactionId` and sum to zero (DEBITs == CREDITs).
+/// for every transaction Σ DEBIT == Σ CREDIT (enforced by a deferred constraint trigger).
 model LedgerEntry {
-  id             String          @id @default(cuid())
-  transactionId  String // groups the legs of one transaction
-  accountId      String
-  direction      LedgerDirection
-  amount         BigInt // always > 0; sign comes from `direction`
-  // Unique per leg, derived from the caller's operation key (e.g. `${opKey}:debit`).
-  idempotencyKey String          @unique
-  reason         String // e.g. BET, PAYOUT, GRANT (TODO(fase-1): turn into an enum)
-  roundId        String?
-  createdAt      DateTime        @default(now())
+  id            String          @id @default(cuid())
+  transactionId String
+  accountId     String
+  direction     LedgerDirection
+  amount        BigInt // always > 0; the sign comes from `direction`
+  balanceAfter  BigInt // account balance right after this leg (running balance)
+  createdAt     DateTime        @default(now())
 
-  account Account    @relation(fields: [accountId], references: [id])
-  round   GameRound? @relation(fields: [roundId], references: [id])
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id])
+  account     Account           @relation(fields: [accountId], references: [id])
 
   @@index([transactionId])
   @@index([accountId, createdAt])
-  @@index([roundId])
 }
 
 model GameRound {
@@ -106,10 +151,10 @@ model GameRound {
   createdAt  DateTime    @default(now())
   settledAt  DateTime?
 
-  user     User          @relation(fields: [userId], references: [id])
-  seedPair SeedPair      @relation(fields: [seedPairId], references: [id])
-  events   RoundEvent[]
-  ledger   LedgerEntry[]
+  user               User                @relation(fields: [userId], references: [id])
+  seedPair           SeedPair            @relation(fields: [seedPairId], references: [id])
+  events             RoundEvent[]
+  ledgerTransactions LedgerTransaction[]
 
   @@unique([seedPairId, nonce])
   @@index([userId, createdAt])
