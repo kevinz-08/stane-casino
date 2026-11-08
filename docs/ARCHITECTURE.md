@@ -114,9 +114,9 @@ Todo el paso `debitar → registrar → acreditar` ocurre con consistencia garan
 | Módulo               | Responsabilidad                                                                                      | Fase |
 | -------------------- | ---------------------------------------------------------------------------------------------------- | ---- |
 | `health`             | Liveness (y luego readiness: PostgreSQL y Redis). **Implementado.**                                  | 0    |
-| `auth`               | Registro, login, JWT, guards y roles.                                                                | 1    |
-| `users`              | Perfil y consulta de usuarios.                                                                       | 1    |
-| `wallet`             | Ledger de doble entrada, saldos, transferencias idempotentes. Único módulo que escribe asientos.     | 1    |
+| `auth`               | Registro, login, JWT, refresh tokens rotatorios, guards y roles. **Implementado.**                   | 1    |
+| `users`              | Perfil y consulta de usuarios. **Implementado.**                                                     | 1    |
+| `wallet`             | Ledger de doble entrada, saldos, transferencias idempotentes, reconciliación. **Implementado.**      | 1    |
 | `fairness`           | Pares de seeds: compromiso (hash), rotación, revelado y verificación.                                | 2    |
 | `rounds`             | Persistencia append-only de eventos de ronda, reproducción y auditoría.                              | 2    |
 | `blackjack`          | Orquesta una ronda: límites → nonce → débito → motor → eventos → pago.                               | 2    |
@@ -138,7 +138,9 @@ Todo el paso `debitar → registrar → acreditar` ocurre con consistencia garan
 
 ## Modelo de datos núcleo (`apps/api/prisma/schema.prisma`)
 
-`User` → `Account` (saldo cacheado) → `LedgerEntry` (inmutable, `idempotencyKey` único) · `GameRound` → `RoundEvent` (único por `roundId+seq`) · `SeedPair` (seeds y `nextNonce`; `GameRound` único por `seedPairId+nonce`).
+`User` → `Account` (saldo cacheado; cuentas de sistema `HOUSE` y `FAUCET`) ← `LedgerEntry` (patas inmutables, con `balanceAfter`) → `LedgerTransaction` (una por operación, `idempotencyKey` único) · `User` → `RefreshToken` (sesiones, ADR-004) · `GameRound` → `RoundEvent` (único por `roundId+seq`) · `SeedPair` (seeds y `nextNonce`; `GameRound` único por `seedPairId+nonce`).
+
+Las invariantes que Prisma no puede expresar están en SQL dentro de la migración inicial: `CHECK` de saldo no negativo para jugadores e importes positivos, triggers append-only, un trigger diferido que exige que cada transacción cuadre, y la unicidad de las cuentas de sistema.
 
 Los importes son `BigInt` (fichas enteras). En JSON viajan como cadenas.
 
@@ -148,7 +150,8 @@ Socket.IO desde NestJS (`lobby.gateway.ts`). Los nombres de evento viven en `pac
 
 ## Calidad y entorno
 
-- Tests: Vitest en cada workspace; fast-check para propiedades del motor (p. ej. conservación de fichas, rango del RNG, reproducibilidad).
+- Tests: Vitest en cada workspace; fast-check para propiedades (ledger, y en el motor: conservación de fichas, rango del RNG, reproducibilidad). `pnpm test` solo ejecuta tests unitarios (no necesita Docker). `pnpm test:integration` arranca la API completa contra PostgreSQL real, en una base `*_test` propia, y exige cobertura ≥ 90 % en `wallet`.
+- Transversal (`apps/api/src/common`): logs JSON con pino y `x-request-id` (se reutiliza el entrante o se genera; aparece en los logs y en los errores), `ValidationPipe` global (rechaza propiedades desconocidas), filtro de errores con códigos estables (`ApiErrorDto`), helmet, CORS con credenciales y rate limiting por IP (más estricto en las rutas de credenciales).
 - Lint/formato: ESLint 9 (config plana compartida) y Prettier; Husky + lint-staged en pre-commit.
-- CI: GitHub Actions (`.github/workflows/ci.yml`): format, lint, build y test.
+- CI: GitHub Actions (`.github/workflows/ci.yml`): format, lint, build, typecheck, tests unitarios y tests de integración con un servicio PostgreSQL.
 - Local: `docker-compose.yml` con PostgreSQL 17 y Redis 7.

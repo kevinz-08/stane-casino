@@ -32,6 +32,16 @@ Dependencias: `0 → 1 → 2 → 3`; `4` depende de `2` (RNG, fairness, rounds) 
 
 ## Fase 1 — Auth + Wallet/Ledger
 
+**Estado: implementada** en la rama `feat/fase-1-auth-wallet`. Los criterios de aceptación se verifican con `pnpm test:integration` contra PostgreSQL real (también en CI). Decisiones: [ADR-002](ADRs/ADR-002-ledger-doble-entrada.md) (ledger, actualizado) y [ADR-004](ADRs/ADR-004-autenticacion-y-sesiones.md) (sesiones).
+
+| Criterio                                                                             | Dónde se verifica                                                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 200 débitos concurrentes con saldo para 100 ⇒ 100 éxitos, saldo ≥ 0, ledger cuadrado | `apps/api/test/wallet.concurrency.int.test.ts`                                                          |
+| Misma `idempotencyKey` × 50 en paralelo ⇒ 1 conjunto de asientos y misma respuesta   | `apps/api/test/wallet.idempotency.int.test.ts`                                                          |
+| Propiedad: ΣDEBIT = ΣCREDIT y `balance` = Σ asientos                                 | `apps/api/test/wallet.properties.int.test.ts` (fast-check, modelo de referencia + variante concurrente) |
+| `UPDATE`/`DELETE` sobre `LedgerEntry` falla                                          | `apps/api/test/ledger.constraints.int.test.ts` (triggers)                                               |
+| Cobertura ≥ 90 % en `wallet`                                                         | umbral en `apps/api/vitest.integration.config.ts` (falla el comando si no se cumple)                    |
+
 - **Objetivo**: identidad de usuario y billetera correcta bajo concurrencia y reintentos.
 - **Entregables**:
   - Primera migración de Prisma; restricciones SQL (`balance >= 0`, inmutabilidad de `LedgerEntry`).
@@ -130,7 +140,7 @@ Dependencias: `0 → 1 → 2 → 3`; `4` depende de `2` (RNG, fairness, rounds) 
 - **Dependencias**: Fase 3 (infraestructura de mesas en tiempo real, Redis, reconexión), Fase 2 (RNG y fairness) y `canBet` de juego responsable. Puede empezar tras la Fase 3, en paralelo a la 4; se coloca al final solo para no retrasar el MVP y el despliegue. Al integrarlo hay que cubrirlo en las pruebas de la Fase 5a.
 - **Entregables**:
   - `game-engine/poker`: evaluador de manos de 5 de 7 cartas, máquina de estados de la mano (blinds, preflop/flop/turn/river, showdown), validación de acciones (fold/check/call/bet/raise/all-in), apuestas mínimas y re-raise, **bote principal y botes laterales**, reparto de empates (y ficha impar). Implementa `Game`.
-  - Fairness para varios jugadores: barajado por mano con `serverSeed` comprometido + `clientSeed` combinado de todos los asientos + `nonce` de mano; verificable tras la rotación (ver ADR-003, ampliar con un ADR-004 si cambia el esquema).
+  - Fairness para varios jugadores: barajado por mano con `serverSeed` comprometido + `clientSeed` combinado de todos los asientos + `nonce` de mano; verificable tras la rotación (ver ADR-003, ampliar con un ADR-005 si cambia el esquema).
   - API: módulo `poker` (mesas cash, asientos, buy-in y recarga, sentarse/levantarse, temporizador de turno con _time bank_ y fold automático, desconexión → sit-out) usando `lobby`, `wallet`, `rounds`, `fairness` y `canBet`. El buy-in mueve fichas de la billetera a la mesa mediante asientos del ledger; al levantarse se devuelven.
   - **Rake** opcional en fichas (cuenta `HOUSE`) con tope por mano, configurable por mesa.
   - Eventos por mano guardados en `rounds` (reproducibles); cada jugador solo recibe sus cartas privadas hasta el showdown.

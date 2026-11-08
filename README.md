@@ -9,7 +9,7 @@ Casino online de portafolio que imita el diseño de sistema de un casino real, *
 - **Rondas como eventos reproducibles** y **juego responsable** (límites y autoexclusión).
 - **Monolito modular**, preparado para separar servicios más adelante.
 
-> Estado: **scaffold (Fase 0)**. Solo existe la estructura, los contratos y el endpoint `/health`. No hay lógica de negocio. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
+> Estado: **Fase 1** (auth + wallet/ledger). Registro, login, sesiones con refresh token rotatorio, billetera de doble entrada con fichas de bienvenida, historial y reconciliación. Aún no hay juegos. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
@@ -43,11 +43,23 @@ pnpm install
 cp .env.example .env          # en PowerShell: Copy-Item .env.example .env
 docker compose up -d          # PostgreSQL :5432 y Redis :6379
 pnpm db:generate              # genera el cliente de Prisma
+pnpm db:deploy                # aplica las migraciones a la base de desarrollo
 pnpm build                    # compila paquetes y apps (necesario antes de dev la primera vez)
 pnpm dev                      # web en :3000, api en :4000
 ```
 
-Comprobación rápida: `curl http://localhost:4000/health` → `{"status":"ok",...}`.
+Comprobación rápida: `curl http://localhost:4000/health` → `{"status":"ok",...}`. Después, crea una cuenta en http://localhost:3000/register.
+
+Si el puerto 5432 ya está ocupado (p. ej. por un PostgreSQL instalado en Windows), cambia `POSTGRES_PORT` y el puerto de `DATABASE_URL` en tu `.env` (p. ej. a `5434`) y vuelve a ejecutar `docker compose up -d`.
+
+### Tests
+
+```bash
+pnpm test                     # unitarios: no necesitan Docker
+pnpm test:integration         # API completa contra PostgreSQL real (requiere docker compose up)
+```
+
+Los tests de integración usan su propia base de datos: `TEST_DATABASE_URL` o, por defecto, la de `DATABASE_URL` con el sufijo `_test`. La crean y migran automáticamente, nunca la vacían (cada test crea sus propios datos) y fallan si la cobertura de `wallet` baja del 90 % (informe HTML en `apps/api/coverage/`).
 
 Para activar los hooks de Husky el directorio debe ser un repositorio git (`git init`) y volver a ejecutar `pnpm install`.
 
@@ -58,10 +70,13 @@ Para activar los hooks de Husky el directorio debe ser un repositorio git (`git 
 | `pnpm dev`                          | Arranca web y api (y recompila los paquetes) en watch |
 | `pnpm build`                        | Compila todo en orden de dependencias (Turborepo)     |
 | `pnpm lint`                         | ESLint en todos los workspaces                        |
-| `pnpm test`                         | Vitest en todos los workspaces                        |
+| `pnpm test`                         | Tests unitarios (Vitest) en todos los workspaces      |
+| `pnpm test:integration`             | Tests de integración de la API contra PostgreSQL      |
 | `pnpm typecheck`                    | `tsc --noEmit` en todos los workspaces                |
 | `pnpm format` / `pnpm format:check` | Prettier                                              |
 | `pnpm db:generate`                  | `prisma generate` (api)                               |
+| `pnpm db:migrate`                   | `prisma migrate dev` (crea y aplica migraciones)      |
+| `pnpm db:deploy`                    | `prisma migrate deploy` (aplica las pendientes)       |
 | `pnpm infra:up` / `pnpm infra:down` | Levanta / baja PostgreSQL y Redis                     |
 
 Un workspace concreto: `pnpm --filter @casino/api <script>`.
@@ -70,4 +85,4 @@ Un workspace concreto: `pnpm --filter @casino/api <script>`.
 
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Roadmap por fases](docs/ROADMAP.md)
-- ADRs: [001 monolito modular](docs/ADRs/ADR-001-monolito-modular.md) · [002 ledger de doble entrada](docs/ADRs/ADR-002-ledger-doble-entrada.md) · [003 RNG y provably fair](docs/ADRs/ADR-003-rng-provably-fair.md)
+- ADRs: [001 monolito modular](docs/ADRs/ADR-001-monolito-modular.md) · [002 ledger de doble entrada](docs/ADRs/ADR-002-ledger-doble-entrada.md) · [003 RNG y provably fair](docs/ADRs/ADR-003-rng-provably-fair.md) · [004 autenticación y sesiones](docs/ADRs/ADR-004-autenticacion-y-sesiones.md)
