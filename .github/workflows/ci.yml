@@ -8,6 +8,27 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    services:
+      # Real PostgreSQL for the ledger concurrency/idempotency/property tests (ADR-002).
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: casino
+          POSTGRES_PASSWORD: casino
+          POSTGRES_DB: casino
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casino -d casino"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # The integration suite creates and migrates its own `casino_test` database.
+      TEST_DATABASE_URL: postgresql://casino:casino@localhost:5432/casino_test?schema=public
+
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,5 +41,13 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm build
+      - run: pnpm typecheck
       - run: pnpm test
-      # TODO(phase-1): add postgres + redis service containers for integration tests
+      - run: pnpm test:integration
+      - name: Upload API coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: apps/api/coverage
+          if-no-files-found: ignore

@@ -13,13 +13,16 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @casino/api db:generate",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:migrate": "pnpm --filter @casino/api db:migrate",
+    "db:deploy": "pnpm --filter @casino/api db:deploy"
   },
   "devDependencies": {
     "@casino/config": "workspace:*",
