@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { loadBalance, logout, refreshSession } from '@/lib/api';
-import { formatChips } from '@/lib/format';
+import { AnimatedChips } from './animated-chips';
 import { useSessionStore } from '@/stores/session.store';
 
 /**
@@ -35,7 +35,7 @@ export function SessionHeader() {
     <header className="border-b border-white/10">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 p-4">
         <Link href="/" className="font-semibold tracking-tight">
-          Casino <span className="text-xs opacity-60">fichas virtuales</span>
+          Casino <span className="hidden text-xs opacity-60 sm:inline">fichas virtuales</span>
         </Link>
 
         {status === 'unknown' && <span className="text-sm opacity-50">…</span>}
@@ -55,13 +55,13 @@ export function SessionHeader() {
         )}
 
         {status === 'authenticated' && user && (
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 text-sm sm:gap-4">
             <span
-              className="rounded bg-white/5 px-3 py-1 font-mono tabular-nums"
+              className="whitespace-nowrap rounded bg-white/5 px-3 py-1 font-mono tabular-nums"
               aria-label="Saldo de fichas"
               data-testid="balance"
             >
-              {formatChips(balance)} fichas
+              <AnimatedChips value={balance} /> fichas
             </span>
             <Link href="/account" className="hover:underline">
               {user.displayName}

@@ -8,11 +8,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@casino/game-engine": "workspace:*",
     "@casino/shared": "workspace:*",
+    "canvas-confetti": "^1.9.4",
+    "motion": "^14.10.1",
     "next": "^16.4.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -20,12 +23,17 @@
   },
   "devDependencies": {
     "@casino/config": "workspace:*",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4.3.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "globals": "^17.14.0",
     "eslint": "^9.39.5",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.5",
     "typescript": "~5.9.3",
     "vitest": "^3.2.7"

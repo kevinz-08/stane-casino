@@ -1,10 +1,46 @@
 @import 'tailwindcss';
 
+/* Design tokens (D1). Used as Tailwind utilities: bg-felt, text-brass, font-display... */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+
+  --color-ink: #0b0f14;
+  --color-felt: #0f5132;
+  --color-felt-dark: #0a3a24;
+  --color-felt-light: #1a7a4c;
+  --color-wood: #5b3a1e;
+  --color-wood-dark: #3b2412;
+  --color-brass: #d4af37;
+  --color-brass-light: #f1d77a;
+  --color-cream: #f8f3e6;
+
+  --shadow-card: 0 2px 0 rgb(0 0 0 / 0.15), 0 6px 14px rgb(0 0 0 / 0.35);
+  --shadow-chip: 0 2px 0 rgb(0 0 0 / 0.35), 0 4px 8px rgb(0 0 0 / 0.3);
+}
+
 :root {
   color-scheme: dark;
 }
 
 body {
-  background: #0b0f14;
+  background: var(--color-ink);
   color: #e6edf3;
+}
+
+/* 3D card flip */
+.card-3d {
+  transform-style: preserve-3d;
+}
+.card-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
 }
