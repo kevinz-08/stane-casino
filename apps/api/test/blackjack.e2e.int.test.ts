@@ -317,6 +317,33 @@ describe('blackjack (HTTP end-to-end, real PostgreSQL)', () => {
     expect(ids.indexOf(second.round.id)).toBeLessThan(ids.indexOf(first.round.id));
   });
 
+  it('start and action responses carry exactly the new events, hole card hidden', async () => {
+    const { auth } = await signUp();
+    const open = await startOpenRound(auth);
+    expect(open.events?.map((e) => e.seq)).toEqual(
+      Array.from({ length: open.view.version }, (_, i) => i),
+    );
+    const hole = open.events?.find(
+      (e) => e.type === 'CARD_DEALT' && e.payload.to === 'DEALER' && e.payload.faceDown,
+    );
+    expect(hole?.payload).toMatchObject({ card: null });
+
+    let current = open;
+    while (current.view.phase !== 'SETTLED') {
+      const res =
+        current.view.phase === 'INSURANCE'
+          ? await act(auth, current, 'INSURANCE', { take: false })
+          : await act(auth, current, 'STAND');
+      const next = res.body as Round;
+      const seqs = next.events?.map((e) => e.seq) ?? [];
+      expect(seqs[0]).toBe(current.view.version);
+      expect(seqs.at(-1)).toBe(next.view.version - 1);
+      current = next;
+    }
+    const revealed = current.events?.find((e) => e.type === 'HOLE_CARD_REVEALED');
+    expect(revealed?.payload).toMatchObject({ card: expect.stringMatching(/^[A2-9TJQK][SHDC]$/) });
+  });
+
   it('round events are append-only in the database', async () => {
     const { auth } = await signUp();
     const done = await playToEnd(auth, await startOpenRound(auth));

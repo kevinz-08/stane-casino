@@ -201,7 +201,10 @@ export interface BlackjackRoundDto<TView = unknown, TEvent = unknown> {
   round: RoundSummaryDto;
   view: TView;
   fairness: RoundFairnessDto;
-  /** Hole card hidden until revealed. Only included when fetching a single round. */
+  /**
+   * Hole card hidden until revealed. Fetching a round: every event. Starting a round or acting:
+   * only the events that request produced (the client animates them in order).
+   */
   events?: TEvent[];
   /** Wallet balance after the request. */
   balance: ChipAmountString;

@@ -93,7 +93,7 @@ export class BlackjackService {
         const step = init({ bet, rulesVersion: created.rulesVersion }, rngFor(seeds));
         return this.persistStep(db, created, account.id, step.state, step.events);
       });
-      return this.toDto(round, userId);
+      return this.toDto(round, userId, { eventsFrom: 0 });
     } catch (error) {
       if (!isPrismaError(error, PrismaErrorCode.UniqueViolation)) throw error;
       // Either a concurrent request with the same key won, or another round is open.
@@ -145,7 +145,8 @@ export class BlackjackService {
       }
       return this.persistStep(db, current, account.id, step.state, step.events);
     });
-    return this.toDto(round, userId);
+    // The new events of this action, so the client can animate them in order.
+    return this.toDto(round, userId, { eventsFrom: version });
   }
 
   async getActive(userId: string): Promise<ActiveBlackjackRoundDto<BlackjackPlayerView>> {
@@ -156,7 +157,7 @@ export class BlackjackService {
   /** Full round with its (redacted) event log and fairness data, for history and verification. */
   async get(userId: string, roundId: string): Promise<BlackjackRound> {
     const round = await this.rounds.getOwned(roundId, userId);
-    return this.toDto(round, userId, { withEvents: true });
+    return this.toDto(round, userId, { eventsFrom: 0 });
   }
 
   // ---------------------------------------------------------------------------------------
@@ -196,13 +197,14 @@ export class BlackjackService {
 
   private async replayStart(round: GameRound, requestHash: string, userId: string) {
     if (round.requestHash !== requestHash) throw new StartKeyConflictError();
-    return this.toDto(round, userId);
+    return this.toDto(round, userId, { eventsFrom: 0 });
   }
 
   private async toDto(
     round: GameRound,
     userId: string,
-    options: { withEvents?: boolean } = {},
+    /** Include the (redacted) events from this seq on. Omitted: no events. */
+    options: { eventsFrom?: number } = {},
   ): Promise<BlackjackRound> {
     const events = (await this.rounds.events(round.id)) as BlackjackEvent[];
     const state = replayEvents(events);
@@ -214,7 +216,9 @@ export class BlackjackService {
       round: toRoundSummary(round),
       view: toPlayerView(state),
       fairness,
-      ...(options.withEvents ? { events: redactEvents(events) } : {}),
+      ...(options.eventsFrom !== undefined
+        ? { events: redactEvents(events).slice(options.eventsFrom) }
+        : {}),
       balance: account.balance.toString(),
     };
   }
