@@ -21,4 +21,9 @@ export const REFRESH_COOKIE_NAME = 'casino_rt';
 /** Header used to correlate a request across logs and error responses. */
 export const REQUEST_ID_HEADER = 'x-request-id';
 
-// TODO(phase-2): bet limits per game
+/** Blackjack table limits. Bets must be even so 3:2 payouts and insurance stay in whole chips. */
+export const BLACKJACK_MIN_BET = 10n;
+export const BLACKJACK_MAX_BET = 1_000n;
+
+/** Allowed characters of a player-chosen client seed. */
+export const CLIENT_SEED_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;

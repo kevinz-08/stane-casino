@@ -147,6 +147,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@casino/game-engine':
+        specifier: workspace:*
+        version: link:../../packages/game-engine
       '@casino/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -139,17 +139,27 @@ model LedgerEntry {
   @@index([accountId, createdAt])
 }
 
+/// Owned by `rounds`. The authoritative state of a round is the replay of its events; the
+/// columns here are a summary for listing and reporting. At most one CREATED/IN_PROGRESS round
+/// per user and game (partial unique index in SQL).
 model GameRound {
-  id         String      @id @default(cuid())
-  userId     String
-  game       GameType
-  status     RoundStatus @default(CREATED)
-  bet        BigInt
-  payout     BigInt?
-  seedPairId String
-  nonce      Int // nonce used for this round with the seed pair
-  createdAt  DateTime    @default(now())
-  settledAt  DateTime?
+  id             String      @id @default(cuid())
+  userId         String
+  game           GameType
+  status         RoundStatus @default(CREATED)
+  rulesVersion   String // e.g. bj-v1: rules are versioned so old rounds keep verifying
+  bet            BigInt // initial stake
+  totalBet       BigInt // every stake of the round (doubles, splits, insurance)
+  payout         BigInt? // total returned to the player once settled (stakes included)
+  seedPairId     String
+  nonce          Int // nonce used for this round with the seed pair
+  /// Number of events so far (= seq of the next one). Clients send it back with each action.
+  version        Int         @default(0)
+  /// Client-chosen key of the "start round" request (retries return the same round).
+  idempotencyKey String
+  requestHash    String
+  createdAt      DateTime    @default(now())
+  settledAt      DateTime?
 
   user               User                @relation(fields: [userId], references: [id])
   seedPair           SeedPair            @relation(fields: [seedPairId], references: [id])
@@ -157,10 +167,12 @@ model GameRound {
   ledgerTransactions LedgerTransaction[]
 
   @@unique([seedPairId, nonce])
+  @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
 }
 
-/// Append-only event log: replaying `seq` 0..n reproduces the round.
+/// Append-only event log (UPDATE/DELETE blocked by triggers): replaying `seq` 0..n reproduces
+/// the round. Payloads are plain JSON (chip amounts as strings).
 model RoundEvent {
   id        String   @id @default(cuid())
   roundId   String
@@ -174,10 +186,11 @@ model RoundEvent {
   @@unique([roundId, seq])
 }
 
+/// Owned by `fairness`. At most one ACTIVE pair per user (partial unique index in SQL).
 model SeedPair {
   id             String     @id @default(cuid())
   userId         String
-  // TODO(fase-2): encrypt at rest while ACTIVE; only exposed after rotation.
+  /// AES-256-GCM ciphertext while ACTIVE (`v1:<iv>:<tag>:<data>`); plaintext once REVEALED.
   serverSeed     String
   serverSeedHash String // SHA-256(serverSeed), published before playing
   clientSeed     String

@@ -1,3 +1,5 @@
+import type { GameType } from './constants';
+
 /**
  * Wire-format DTOs. Chip amounts travel as decimal strings because JSON cannot carry bigint.
  */
@@ -105,4 +107,106 @@ export interface ReconciliationReportDto {
   ok: boolean;
 }
 
-// TODO(phase-2): BetIntentDto, RoundEventDto, SeedCommitmentDto
+// --- fairness ---------------------------------------------------------------------------
+
+/** The active pair: the server seed itself stays secret until rotation. */
+export interface ActiveSeedPairDto {
+  id: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  /** Nonce the next round will use. */
+  nextNonce: number;
+  createdAt: string;
+}
+
+/** A rotated pair: everything needed to verify all of its rounds. */
+export interface RevealedSeedPairDto {
+  id: string;
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  /** Rounds played with nonces 0 .. nextNonce − 1. */
+  nextNonce: number;
+  createdAt: string;
+  revealedAt: string;
+}
+
+export interface SeedsDto {
+  active: ActiveSeedPairDto;
+  revealed: RevealedSeedPairDto[];
+}
+
+export interface RotateSeedsRequestDto {
+  /** New client seed for the next pair; a random one is generated if omitted. */
+  clientSeed?: string;
+}
+
+export interface RotateSeedsResponseDto {
+  revealed: RevealedSeedPairDto;
+  active: ActiveSeedPairDto;
+}
+
+/** Fairness data attached to a round. `serverSeed` is only present once the pair is revealed. */
+export interface RoundFairnessDto {
+  seedPairId: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  nonce: number;
+  serverSeed: string | null;
+}
+
+// --- rounds ---------------------------------------------------------------------------
+
+export type RoundStatusDto = 'CREATED' | 'IN_PROGRESS' | 'SETTLED' | 'VOIDED';
+
+export interface RoundSummaryDto {
+  id: string;
+  game: GameType;
+  status: RoundStatusDto;
+  rulesVersion: string;
+  bet: ChipAmountString;
+  totalBet: ChipAmountString;
+  payout: ChipAmountString | null;
+  nonce: number;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+export interface RoundHistoryDto {
+  rounds: RoundSummaryDto[];
+  nextCursor: string | null;
+}
+
+// --- blackjack ------------------------------------------------------------------------
+
+export type BlackjackActionTypeDto = 'HIT' | 'STAND' | 'DOUBLE' | 'SPLIT' | 'INSURANCE';
+
+export interface StartBlackjackRequestDto {
+  bet: ChipAmountString;
+}
+
+export interface BlackjackActionRequestDto {
+  action: BlackjackActionTypeDto;
+  /** Only for INSURANCE. */
+  take?: boolean;
+  /** The `view.version` the client acted on; a stale version is rejected with 409. */
+  version: number;
+}
+
+/**
+ * A blackjack round as the player sees it. `TView` / `TEvent` are the engine's
+ * `BlackjackPlayerView` / `BlackjackEvent` (typed by the client from @casino/game-engine).
+ */
+export interface BlackjackRoundDto<TView = unknown, TEvent = unknown> {
+  round: RoundSummaryDto;
+  view: TView;
+  fairness: RoundFairnessDto;
+  /** Hole card hidden until revealed. Only included when fetching a single round. */
+  events?: TEvent[];
+  /** Wallet balance after the request. */
+  balance: ChipAmountString;
+}
+
+export interface ActiveBlackjackRoundDto<TView = unknown> {
+  round: BlackjackRoundDto<TView> | null;
+}

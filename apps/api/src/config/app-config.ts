@@ -41,6 +41,10 @@ export interface AppConfig {
     /** Max duration of a ledger transaction. */
     txTimeoutMs: number;
   };
+  fairness: {
+    /** 32-byte AES-256-GCM key that encrypts active server seeds at rest. */
+    seedEncryptionKey: Buffer;
+  };
 }
 
 type Env = Record<string, string | undefined>;
@@ -110,6 +114,14 @@ export function loadConfig(env: Env = process.env): AppConfig {
     problems.push('REFRESH_COOKIE_SAMESITE=none requires REFRESH_COOKIE_SECURE=true');
   }
 
+  const seedKeyRaw = str('SERVER_SEED_ENCRYPTION_KEY');
+  const seedEncryptionKey = /^[0-9a-f]{64}$/i.test(seedKeyRaw)
+    ? Buffer.from(seedKeyRaw, 'hex')
+    : Buffer.from(seedKeyRaw, 'base64');
+  if (seedKeyRaw && seedEncryptionKey.length !== 32) {
+    problems.push('SERVER_SEED_ENCRYPTION_KEY must be 32 bytes (64 hex chars or base64)');
+  }
+
   const config: AppConfig = {
     nodeEnv,
     port: int('API_PORT', 4000, 1),
@@ -140,6 +152,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
       txMaxWaitMs: int('WALLET_TX_MAX_WAIT_MS', 10_000, 100),
       txTimeoutMs: int('WALLET_TX_TIMEOUT_MS', 10_000, 100),
     },
+    fairness: { seedEncryptionKey },
   };
 
   if (problems.length > 0) throw new ConfigError(problems);

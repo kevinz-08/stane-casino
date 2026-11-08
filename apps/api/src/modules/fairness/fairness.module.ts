@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { RoundsModule } from '../rounds/rounds.module';
 import { FairnessController } from './fairness.controller';
 import { FairnessService } from './fairness.service';
 
-// Seed pairs: commit (hash), rotate, reveal and verification.
-// TODO(fase-2): wire dependencies and exports
+// Seed pairs: commitment (hash), nonce reservation, rotation and reveal. Owner of `SeedPair`.
 @Module({
+  imports: [RoundsModule],
   controllers: [FairnessController],
   providers: [FairnessService],
   exports: [FairnessService],

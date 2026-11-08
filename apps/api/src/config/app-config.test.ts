@@ -4,6 +4,7 @@ import { loadConfig } from './app-config';
 const base = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
   JWT_ACCESS_SECRET: 'x'.repeat(32),
+  SERVER_SEED_ENCRYPTION_KEY: 'ab'.repeat(32),
 };
 
 describe('loadConfig', () => {

@@ -11,7 +11,11 @@ describe('WalletService.transfer input validation', () => {
   const prisma = { ledgerTransaction: { findUnique: vi.fn() } };
   const wallet = new WalletService(
     prisma as unknown as PrismaService,
-    loadConfig({ DATABASE_URL: 'postgresql://x', JWT_ACCESS_SECRET: 'x'.repeat(32) }),
+    loadConfig({
+      DATABASE_URL: 'postgresql://x',
+      JWT_ACCESS_SECRET: 'x'.repeat(32),
+      SERVER_SEED_ENCRYPTION_KEY: 'ab'.repeat(32),
+    }),
   );
   const valid: TransferCommand = {
     idempotencyKey: 'k',

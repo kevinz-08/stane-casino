@@ -130,76 +130,92 @@ export class WalletService {
     }
   }
 
+  /**
+   * Same as `transfer`, but inside the caller's database transaction, so that moving chips
+   * commits or rolls back together with the caller's own writes (e.g. a game round).
+   * Idempotency is the caller's job here: a reused key raises a unique violation that aborts
+   * the whole outer transaction.
+   */
+  async transferWithin(
+    db: Prisma.TransactionClient,
+    command: TransferCommand,
+  ): Promise<LedgerTransactionResult> {
+    validate(command);
+    return this.postWithin(db, command, hashRequest(command));
+  }
+
   private post(command: TransferCommand, requestHash: string): Promise<LedgerTransactionResult> {
+    return this.prisma.$transaction((db) => this.postWithin(db, command, requestHash), {
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      maxWait: this.config.wallet.txMaxWaitMs,
+      timeout: this.config.wallet.txTimeoutMs,
+    });
+  }
+
+  private async postWithin(
+    db: Prisma.TransactionClient,
+    command: TransferCommand,
+    requestHash: string,
+  ): Promise<LedgerTransactionResult> {
     const { fromAccountId, toAccountId, amount } = command;
+    // 1. Idempotency gate. A concurrent duplicate blocks here until we commit or roll back.
+    const tx = await db.ledgerTransaction.create({
+      data: {
+        idempotencyKey: command.idempotencyKey,
+        requestHash,
+        reason: command.reason,
+        roundId: command.roundId ?? null,
+      },
+    });
 
-    return this.prisma.$transaction(
-      async (db) => {
-        // 1. Idempotency gate. A concurrent duplicate blocks here until we commit or roll back.
-        const tx = await db.ledgerTransaction.create({
-          data: {
-            idempotencyKey: command.idempotencyKey,
-            requestHash,
-            reason: command.reason,
-            roundId: command.roundId ?? null,
-          },
-        });
-
-        // 2. Lock both accounts in a global order (ascending id) to rule out deadlocks.
-        const locked = new Map<string, LockedAccount>();
-        for (const id of [fromAccountId, toAccountId].sort()) {
-          const rows = await db.$queryRaw<LockedAccount[]>`
+    // 2. Lock both accounts in a global order (ascending id) to rule out deadlocks.
+    const locked = new Map<string, LockedAccount>();
+    for (const id of [fromAccountId, toAccountId].sort()) {
+      const rows = await db.$queryRaw<LockedAccount[]>`
             SELECT "id", "type"::text AS "type", "balance"
             FROM "Account" WHERE "id" = ${id} FOR UPDATE`;
-          const row = rows[0];
-          if (!row) throw new AccountNotFoundError(id);
-          locked.set(id, row);
-        }
+      const row = rows[0];
+      if (!row) throw new AccountNotFoundError(id);
+      locked.set(id, row);
+    }
 
-        // 3. Funds check against the locked balance. System accounts may go negative.
-        const from = locked.get(fromAccountId) as LockedAccount;
-        if (from.type === AccountType.PLAYER_WALLET && from.balance < amount) {
-          throw new InsufficientFundsError(from.id, from.balance, amount);
-        }
+    // 3. Funds check against the locked balance. System accounts may go negative.
+    const from = locked.get(fromAccountId) as LockedAccount;
+    if (from.type === AccountType.PLAYER_WALLET && from.balance < amount) {
+      throw new InsufficientFundsError(from.id, from.balance, amount);
+    }
 
-        // 4. Update cached balances and write the two legs.
-        const debited = await db.account.update({
-          where: { id: fromAccountId },
-          data: { balance: { decrement: amount } },
-          select: { balance: true },
-        });
-        const credited = await db.account.update({
-          where: { id: toAccountId },
-          data: { balance: { increment: amount } },
-          select: { balance: true },
-        });
+    // 4. Update cached balances and write the two legs.
+    const debited = await db.account.update({
+      where: { id: fromAccountId },
+      data: { balance: { decrement: amount } },
+      select: { balance: true },
+    });
+    const credited = await db.account.update({
+      where: { id: toAccountId },
+      data: { balance: { increment: amount } },
+      select: { balance: true },
+    });
 
-        const legs: LedgerLeg[] = [
-          {
-            accountId: fromAccountId,
-            direction: LedgerDirection.DEBIT,
-            amount,
-            balanceAfter: debited.balance,
-          },
-          {
-            accountId: toAccountId,
-            direction: LedgerDirection.CREDIT,
-            amount,
-            balanceAfter: credited.balance,
-          },
-        ];
-        await db.ledgerEntry.createMany({
-          data: legs.map((leg) => ({ ...leg, transactionId: tx.id })),
-        });
-
-        return toResult(tx, legs);
+    const legs: LedgerLeg[] = [
+      {
+        accountId: fromAccountId,
+        direction: LedgerDirection.DEBIT,
+        amount,
+        balanceAfter: debited.balance,
       },
       {
-        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-        maxWait: this.config.wallet.txMaxWaitMs,
-        timeout: this.config.wallet.txTimeoutMs,
+        accountId: toAccountId,
+        direction: LedgerDirection.CREDIT,
+        amount,
+        balanceAfter: credited.balance,
       },
-    );
+    ];
+    await db.ledgerEntry.createMany({
+      data: legs.map((leg) => ({ ...leg, transactionId: tx.id })),
+    });
+
+    return toResult(tx, legs);
   }
 
   private async withConflictRetry<T>(fn: () => Promise<T>): Promise<T> {

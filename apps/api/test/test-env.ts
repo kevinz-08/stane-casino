@@ -13,6 +13,7 @@ export function integrationEnv(): Record<string, string> {
     NODE_ENV: 'test',
     DATABASE_URL: databaseUrl,
     JWT_ACCESS_SECRET: 'integration-tests-secret-not-for-production-use',
+    SERVER_SEED_ENCRYPTION_KEY: '11'.repeat(32),
     LOG_LEVEL: 'silent',
     LOG_PRETTY: 'false',
     // Cheap hashing and no rate limiting by default; specific tests override these.

@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common';
 import { RoundsController } from './rounds.controller';
 import { RoundsService } from './rounds.service';
 
-// Persist round events (append-only), replay and audit.
-// TODO(fase-2): wire dependencies and exports
+// Append-only round events, summaries and history. Owner of `GameRound` / `RoundEvent`.
 @Module({
   controllers: [RoundsController],
   providers: [RoundsService],
