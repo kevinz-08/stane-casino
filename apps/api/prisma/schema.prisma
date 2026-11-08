@@ -1,0 +1,148 @@
+// Core data model only. No migrations or seeds yet (TODO(fase-1): first migration).
+// Chip amounts are BigInt (integer chips, never floats).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLAYER
+  ADMIN
+}
+
+enum AccountType {
+  PLAYER_WALLET // one per user
+  HOUSE // counterpart of every bet/payout
+  // TODO(fase-1): FAUCET / ADJUSTMENT accounts for chip grants
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum GameType {
+  BLACKJACK
+  SLOTS
+}
+
+enum RoundStatus {
+  CREATED
+  IN_PROGRESS
+  SETTLED
+  VOIDED
+}
+
+enum SeedStatus {
+  ACTIVE
+  REVEALED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         Role     @default(PLAYER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accounts  Account[]
+  rounds    GameRound[]
+  seedPairs SeedPair[]
+}
+
+model Account {
+  id        String      @id @default(cuid())
+  userId    String? // null for system accounts (HOUSE)
+  type      AccountType
+  currency  String      @default("CHIP")
+  // Cached balance; the ledger is the source of truth and must always reconcile with it.
+  balance   BigInt      @default(0)
+  createdAt DateTime    @default(now())
+
+  user    User?         @relation(fields: [userId], references: [id])
+  entries LedgerEntry[]
+
+  @@index([userId])
+}
+
+/// Immutable, append-only. One row per leg of a double-entry transaction:
+/// the legs of a transaction share `transactionId` and sum to zero (DEBITs == CREDITs).
+model LedgerEntry {
+  id             String          @id @default(cuid())
+  transactionId  String // groups the legs of one transaction
+  accountId      String
+  direction      LedgerDirection
+  amount         BigInt // always > 0; sign comes from `direction`
+  // Unique per leg, derived from the caller's operation key (e.g. `${opKey}:debit`).
+  idempotencyKey String          @unique
+  reason         String // e.g. BET, PAYOUT, GRANT (TODO(fase-1): turn into an enum)
+  roundId        String?
+  createdAt      DateTime        @default(now())
+
+  account Account    @relation(fields: [accountId], references: [id])
+  round   GameRound? @relation(fields: [roundId], references: [id])
+
+  @@index([transactionId])
+  @@index([accountId, createdAt])
+  @@index([roundId])
+}
+
+model GameRound {
+  id         String      @id @default(cuid())
+  userId     String
+  game       GameType
+  status     RoundStatus @default(CREATED)
+  bet        BigInt
+  payout     BigInt?
+  seedPairId String
+  nonce      Int // nonce used for this round with the seed pair
+  createdAt  DateTime    @default(now())
+  settledAt  DateTime?
+
+  user     User          @relation(fields: [userId], references: [id])
+  seedPair SeedPair      @relation(fields: [seedPairId], references: [id])
+  events   RoundEvent[]
+  ledger   LedgerEntry[]
+
+  @@unique([seedPairId, nonce])
+  @@index([userId, createdAt])
+}
+
+/// Append-only event log: replaying `seq` 0..n reproduces the round.
+model RoundEvent {
+  id        String   @id @default(cuid())
+  roundId   String
+  seq       Int
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  round GameRound @relation(fields: [roundId], references: [id])
+
+  @@unique([roundId, seq])
+}
+
+model SeedPair {
+  id             String     @id @default(cuid())
+  userId         String
+  // TODO(fase-2): encrypt at rest while ACTIVE; only exposed after rotation.
+  serverSeed     String
+  serverSeedHash String // SHA-256(serverSeed), published before playing
+  clientSeed     String
+  nextNonce      Int        @default(0)
+  status         SeedStatus @default(ACTIVE)
+  createdAt      DateTime   @default(now())
+  revealedAt     DateTime?
+
+  user   User        @relation(fields: [userId], references: [id])
+  rounds GameRound[]
+
+  @@index([userId, status])
+}

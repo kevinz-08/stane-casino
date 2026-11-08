@@ -1,0 +1,32 @@
+{
+  "name": "casino",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Virtual-chip casino portfolio project (server-authoritative, provably fair).",
+  "packageManager": "pnpm@10.33.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "prettier": "@casino/config/prettier",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @casino/api db:generate",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@casino/config": "workspace:*",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10",
+    "typescript": "~5.9.3"
+  }
+}
