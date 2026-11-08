@@ -9,7 +9,7 @@ Casino online de portafolio que imita el diseño de sistema de un casino real, *
 - **Rondas como eventos reproducibles** y **juego responsable** (límites y autoexclusión).
 - **Monolito modular**, preparado para separar servicios más adelante.
 
-> Estado: **Fase 2**. Auth, billetera de doble entrada y **blackjack single-player verificable**: mesa en la web, panel de seeds con rotación y verificador de rondas en el navegador. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
+> Estado: **Fase 2.5**. Auth, billetera de doble entrada y **blackjack single-player verificable**, con una mesa animada (reparto, crupier ilustrado, fichas y sonido), panel de seeds con rotación y verificador de rondas en el navegador. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
@@ -59,7 +59,10 @@ pnpm test                     # unitarios: no necesitan Docker
 pnpm test:integration         # API completa contra PostgreSQL real (requiere docker compose up)
 pnpm --filter @casino/game-engine test:slow                    # 2 M manos: ventaja de la casa
 pnpm --filter @casino/game-engine simulate:blackjack 1000000   # simulador (tras pnpm build)
+pnpm build && pnpm --filter @casino/web test:e2e               # navegador real (Playwright) contra la API
 ```
+
+Los tests E2E arrancan la API (contra la base `_test`) y la web en los puertos 4000 y 3000. En local usan el Google Chrome instalado; en CI, Chromium.
 
 ### Verificar una ronda sin confiar en el código del proyecto
 
@@ -95,4 +98,4 @@ Un workspace concreto: `pnpm --filter @casino/api <script>`.
 
 - [Arquitectura](docs/ARCHITECTURE.md)
 - [Roadmap por fases](docs/ROADMAP.md)
-- ADRs: [001 monolito modular](docs/ADRs/ADR-001-monolito-modular.md) · [002 ledger de doble entrada](docs/ADRs/ADR-002-ledger-doble-entrada.md) · [003 RNG y provably fair](docs/ADRs/ADR-003-rng-provably-fair.md) · [004 autenticación y sesiones](docs/ADRs/ADR-004-autenticacion-y-sesiones.md)
+- ADRs: [001 monolito modular](docs/ADRs/ADR-001-monolito-modular.md) · [002 ledger de doble entrada](docs/ADRs/ADR-002-ledger-doble-entrada.md) · [003 RNG y provably fair](docs/ADRs/ADR-003-rng-provably-fair.md) · [004 autenticación y sesiones](docs/ADRs/ADR-004-autenticacion-y-sesiones.md) · [005 UI dirigida por eventos](docs/ADRs/ADR-005-ui-de-juego-dirigida-por-eventos.md)

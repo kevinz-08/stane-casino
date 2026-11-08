@@ -88,6 +88,23 @@ Dependencias: `0 → 1 → 2 → 3`; `4` depende de `2` (RNG, fairness, rounds) 
 - **Riesgos**: reglas con casos límite (split, doble, seguro, blackjack del crupier); filtrar información oculta (carta tapada) al cliente; cambios de reglas que invaliden la verificación de rondas antiguas (mitigar versionando las reglas).
 - **Estimación**: 3–4 semanas.
 
+## Fase 2.5 — Rediseño visual del blackjack
+
+**Estado: implementada.** La mesa reproduce los eventos de cada respuesta como una animación: cartas que salen del zapato, giro de la carta tapada, fichas que se mueven y un crupier ilustrado (Marco) que hace gestos y reacciona. Decisión técnica en [ADR-005](ADRs/ADR-005-ui-de-juego-dirigida-por-eventos.md); origen de los assets en `apps/web/ASSETS.md` (todo propio, sin descargas).
+
+| Criterio                                                | Dónde se verifica                                                                                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| La escena final coincide con el estado del servidor     | `apps/web/src/features/blackjack/scene.test.ts` (3000 rondas, tras cada respuesta) y E2E `e2e/blackjack.spec.ts` (20 rondas reales en el navegador) |
+| La carta tapada no está en la página antes de revelarse | `scene.test.ts` y E2E (inspecciona el DOM con la ronda abierta)                                                                                     |
+| 60 fps durante el reparto                               | E2E de rendimiento: ≤ 1 fotograma de más de 32 ms con el sonido activado (medido: 0)                                                                |
+| Carga ligera                                            | E2E: < 1,5 MB transferidos en la página de la mesa                                                                                                  |
+| Sin animación / movimiento reducido                     | E2E: "Sin animación" muestra el resultado en < 1,5 s; con `prefers-reduced-motion` la ronda sigue saliendo carta a carta, sin desplazamientos       |
+| Escritorio sin scroll                                   | E2E `e2e/layout.spec.ts`: a 1280×720, 1366×768 y 1920×1080 las manos y los botones caben en la ventana y nada queda cortado por el tapete           |
+| El valor de una carta se ve al aterrizar                | E2E: a velocidad normal, el total de la mano no aparece mientras la primera carta vuela                                                             |
+| Móvil                                                   | E2E (Pixel 7): sin desbordamiento horizontal, ronda jugable, botones ≥ 44 px                                                                        |
+
+Atajos: P pedir, S plantarse, D doblar, E separar, espacio repartir, Esc saltar la animación (o clic en la mesa). Ajustes guardados en el navegador: sonido, volumen, velocidad (normal / rápida / sin animación) y mostrar u ocultar al crupier.
+
 ## Fase 3 — Mesas en tiempo real
 
 - **Objetivo**: rondas sincronizadas para varios jugadores por WebSocket.
@@ -151,7 +168,7 @@ Dependencias: `0 → 1 → 2 → 3`; `4` depende de `2` (RNG, fairness, rounds) 
 - **Dependencias**: Fase 3 (infraestructura de mesas en tiempo real, Redis, reconexión), Fase 2 (RNG y fairness) y `canBet` de juego responsable. Puede empezar tras la Fase 3, en paralelo a la 4; se coloca al final solo para no retrasar el MVP y el despliegue. Al integrarlo hay que cubrirlo en las pruebas de la Fase 5a.
 - **Entregables**:
   - `game-engine/poker`: evaluador de manos de 5 de 7 cartas, máquina de estados de la mano (blinds, preflop/flop/turn/river, showdown), validación de acciones (fold/check/call/bet/raise/all-in), apuestas mínimas y re-raise, **bote principal y botes laterales**, reparto de empates (y ficha impar). Implementa `Game`.
-  - Fairness para varios jugadores: barajado por mano con `serverSeed` comprometido + `clientSeed` combinado de todos los asientos + `nonce` de mano; verificable tras la rotación (ver ADR-003, ampliar con un ADR-005 si cambia el esquema).
+  - Fairness para varios jugadores: barajado por mano con `serverSeed` comprometido + `clientSeed` combinado de todos los asientos + `nonce` de mano; verificable tras la rotación (ver ADR-003, ampliar con un ADR-006 si cambia el esquema).
   - API: módulo `poker` (mesas cash, asientos, buy-in y recarga, sentarse/levantarse, temporizador de turno con _time bank_ y fold automático, desconexión → sit-out) usando `lobby`, `wallet`, `rounds`, `fairness` y `canBet`. El buy-in mueve fichas de la billetera a la mesa mediante asientos del ledger; al levantarse se devuelven.
   - **Rake** opcional en fichas (cuenta `HOUSE`) con tope por mano, configurable por mesa.
   - Eventos por mano guardados en `rounds` (reproducibles); cada jugador solo recibe sus cartas privadas hasta el showdown.
