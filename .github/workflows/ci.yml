@@ -48,6 +48,16 @@ jobs:
       # 2M simulated blackjack rounds: house edge within ±0.3 % of the reference value.
       - run: pnpm --filter @casino/game-engine test:slow
       - run: pnpm test:integration
+      # End-to-end: real API + production web build in Chromium.
+      - run: pnpm --filter @casino/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @casino/web test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
       - name: Upload API coverage report
         if: always()
         uses: actions/upload-artifact@v4
