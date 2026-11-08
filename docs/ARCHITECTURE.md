@@ -107,7 +107,12 @@ sequenceDiagram
   G->>R: guardar eventos y cerrar ronda
 ```
 
-Todo el paso `debitar → registrar → acreditar` ocurre con consistencia garantizada por transacciones de PostgreSQL y claves de idempotencia (detalles en la Fase 1/2).
+Cada petición (`POST /blackjack/rounds` o `POST /blackjack/rounds/:id/actions`) es **una sola transacción de PostgreSQL**. Los servicios de `fairness`, `rounds` y `wallet` reciben el cliente de esa transacción (`transferWithin(db, …)`), y cada uno sigue escribiendo solo en sus tablas. Así una ronda nunca existe sin su apuesta ni se liquida sin su pago.
+
+- **Inicio idempotente**: cabecera `Idempotency-Key`, única por usuario en `GameRound`. Los reintentos devuelven la misma ronda, y un índice parcial impide tener dos rondas abiertas.
+- **Acciones con concurrencia optimista**: el cliente devuelve `view.version` (nº de eventos). La ronda se bloquea con `FOR UPDATE` y una versión desfasada recibe `409 ROUND_VERSION_MISMATCH`, así que un doble clic nunca pide dos cartas.
+- **El estado de una ronda es la reproducción de sus eventos**; `GameRound` solo guarda un resumen. El motor recibe un RNG nuevo en cada paso y avanza el zapato perezoso hasta `cardsDealt`.
+- **Información oculta**: la API devuelve `toPlayerView` y `redactEvents`, de modo que la carta tapada no viaja hasta revelarse y el zapato y el `serverSeed` activo nunca salen del servidor.
 
 ## Responsabilidades por módulo (`apps/api/src/modules`)
 
@@ -117,9 +122,9 @@ Todo el paso `debitar → registrar → acreditar` ocurre con consistencia garan
 | `auth`               | Registro, login, JWT, refresh tokens rotatorios, guards y roles. **Implementado.**                   | 1    |
 | `users`              | Perfil y consulta de usuarios. **Implementado.**                                                     | 1    |
 | `wallet`             | Ledger de doble entrada, saldos, transferencias idempotentes, reconciliación. **Implementado.**      | 1    |
-| `fairness`           | Pares de seeds: compromiso (hash), rotación, revelado y verificación.                                | 2    |
-| `rounds`             | Persistencia append-only de eventos de ronda, reproducción y auditoría.                              | 2    |
-| `blackjack`          | Orquesta una ronda: límites → nonce → débito → motor → eventos → pago.                               | 2    |
+| `fairness`           | Pares de seeds: compromiso (hash), nonce, cifrado en reposo, rotación y revelado. **Implementado.**  | 2    |
+| `rounds`             | Persistencia append-only de eventos de ronda e historial. **Implementado.**                          | 2    |
+| `blackjack`          | Orquesta una ronda: límites → nonce → débito → motor → eventos → pago. **Implementado.**             | 2    |
 | `lobby` (+ gateway)  | Registro de mesas, presencia y difusión en tiempo real por Socket.IO.                                | 3    |
 | `slots`              | Orquesta giros usando el motor genérico de slots.                                                    | 4    |
 | `poker`              | Texas Hold'em cash multijugador: asientos, buy-in vía ledger, turnos con temporizador, botes y rake. | 6    |

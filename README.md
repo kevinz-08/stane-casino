@@ -9,7 +9,7 @@ Casino online de portafolio que imita el diseño de sistema de un casino real, *
 - **Rondas como eventos reproducibles** y **juego responsable** (límites y autoexclusión).
 - **Monolito modular**, preparado para separar servicios más adelante.
 
-> Estado: **Fase 1** (auth + wallet/ledger). Registro, login, sesiones con refresh token rotatorio, billetera de doble entrada con fichas de bienvenida, historial y reconciliación. Aún no hay juegos. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
+> Estado: **Fase 2**. Auth, billetera de doble entrada y **blackjack single-player verificable**: mesa en la web, panel de seeds con rotación y verificador de rondas en el navegador. Ver [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
@@ -57,6 +57,16 @@ Si el puerto 5432 ya está ocupado (p. ej. por un PostgreSQL instalado en Window
 ```bash
 pnpm test                     # unitarios: no necesitan Docker
 pnpm test:integration         # API completa contra PostgreSQL real (requiere docker compose up)
+pnpm --filter @casino/game-engine test:slow                    # 2 M manos: ventaja de la casa
+pnpm --filter @casino/game-engine simulate:blackjack 1000000   # simulador (tras pnpm build)
+```
+
+### Verificar una ronda sin confiar en el código del proyecto
+
+Tras rotar el seed en `/fairness`, el script `scripts/verify-fairness.mjs` (solo usa `node:crypto`) recalcula el hash y el orden de las cartas:
+
+```bash
+node scripts/verify-fairness.mjs shoe --server-seed <seed revelado> --client-seed <client seed> --nonce <n>
 ```
 
 Los tests de integración usan su propia base de datos: `TEST_DATABASE_URL` o, por defecto, la de `DATABASE_URL` con el sufijo `_test`. La crean y migran automáticamente, nunca la vacían (cada test crea sus propios datos) y fallan si la cobertura de `wallet` baja del 90 % (informe HTML en `apps/api/coverage/`).

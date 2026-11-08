@@ -61,6 +61,17 @@ Dependencias: `0 → 1 → 2 → 3`; `4` depende de `2` (RNG, fairness, rounds) 
 
 ## Fase 2 — Motor Blackjack single-player + UI + provably fair
 
+**Estado: implementada** en la rama `feat/fase-2-blackjack`. Reglas `bj-v1`: 6 mazos con barajado nuevo por ronda, S17, 3:2, peek, doblar con cualquier par de cartas, DAS, split hasta 4 manos (ases: una carta, sin resplit), seguro y sin rendición. Las apuestas son pares, entre 10 y 1000.
+
+| Criterio                                                              | Dónde se verifica                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reproducir desde los eventos = estado final guardado (10 000 rondas)  | `packages/game-engine/src/blackjack/properties.test.ts` (y cada estado intermedio). En la API, `apps/api/test/blackjack.e2e.int.test.ts` compara la reproducción de los eventos de la BD con el resumen y la vista devueltos          |
+| Conservación de fichas; ninguna secuencia deja la ronda inconsistente | `properties.test.ts` (fast-check, 2000 secuencias aleatorias + acciones ilegales siempre rechazadas). En la API: Σ débitos de la ronda = `totalBet`, Σ créditos = `payout`, variación de saldo = pago − apostado                      |
+| Vectores HMAC fijos verificados con una implementación independiente  | `scripts/verify-fairness.mjs check` (solo `node:crypto`; paso de CI) + `src/rng/rng.test.ts`                                                                                                                                          |
+| χ² sobre ≥ 1 M cartas; sin sesgo de módulo                            | `src/rng/distribution.test.ts`: 1,1 M cartas por cara y por posición, y `nextInt(3·2³⁰)` uniforme                                                                                                                                     |
+| Una ronda real se verifica desde la UI tras rotar                     | página `/fairness` (verificador en el navegador); test de integración que verifica una ronda real con el motor y con el script                                                                                                        |
+| Ventaja de la casa simulada ±0,3 % del teórico                        | `src/blackjack/house-edge.slow.test.ts`: 2 M manos ⇒ 0,357 % ± 0,082 % frente a la referencia ≈ 0,41 % (Wizard of Odds da 0,334 % con rendición tardía, que vale ≈ 0,08 %). Paso de CI: `pnpm --filter @casino/game-engine test:slow` |
+
 - **Objetivo**: primer juego completo de extremo a extremo, verificable por el jugador.
 - **Entregables**:
   - `game-engine/rng` (HMAC-SHA256, rejection sampling, Fisher–Yates) y `game-engine/fairness` (compromiso y verificador).

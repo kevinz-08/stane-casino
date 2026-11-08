@@ -43,6 +43,10 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+      # Fixed provably-fair vectors re-derived with an independent node:crypto implementation.
+      - run: node scripts/verify-fairness.mjs check packages/game-engine/test-vectors/fairness-v1.json
+      # 2M simulated blackjack rounds: house edge within ±0.3 % of the reference value.
+      - run: pnpm --filter @casino/game-engine test:slow
       - run: pnpm test:integration
       - name: Upload API coverage report
         if: always()

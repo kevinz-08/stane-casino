@@ -19,10 +19,22 @@ Esquema _provably fair_ basado en HMAC-SHA256:
 6. **Rotación y verificación.** Al rotar, se revela el `serverSeed` anterior; cualquiera puede comprobar el hash y reproducir todas las rondas del par con una función pública de verificación (`packages/game-engine/fairness`).
 7. **Interfaz `Rng`.** El motor solo conoce `Rng { nextFloat(); nextInt(max) }`. En producción se inyecta el RNG HMAC; en tests, un RNG fijo o secuencial.
 
+## Implementación (Fase 2)
+
+Detalles que forman parte del esquema verificable (`hmac-sha256-v1`). Cambiar cualquiera de ellos invalida la verificación de rondas antiguas, así que exige una versión nueva:
+
+- **Codificación.** Claves y mensajes en UTF-8; `cursor` empieza en 0; cada bloque HMAC aporta 32 bytes que se consumen en orden; un `uint32` son 4 bytes consecutivos big-endian.
+- **Entero sin sesgo.** `nextInt(n)` descarta los `uint32 ≥ ⌊2³²/n⌋·n` y devuelve `x mod n`.
+- **Zapato.** Orden canónico por mazo: palos S, H, D, C y rangos A, 2…9, T, J, Q, K. 6 mazos (312 cartas) y **barajado nuevo en cada ronda** (un nonce = un zapato). Fisher–Yates hacia delante: para i = 0…n−2, j = i + nextInt(n − i), intercambiar i y j. Se calcula de forma perezosa, solo hasta la última carta repartida; la carta en la posición i es la misma que con el barajado completo.
+- **Orden de reparto.** Jugador, crupier (vista), jugador, crupier (tapada); después, las cartas pedidas, de split o de doblar, y las del crupier.
+- **Reglas versionadas.** Cada ronda guarda `rulesVersion` (`bj-v1`). Las reglas nunca se editan en el sitio.
+- **SHA-256/HMAC en TypeScript puro** (`packages/game-engine/src/crypto`). El mismo verificador funciona en el servidor y en el navegador. Lo fijan los vectores NIST/RFC 4231 y los vectores de `test-vectors/fairness-v1.json`, generados y comprobados en CI por `scripts/verify-fairness.mjs`, que solo usa `node:crypto` y no comparte código con el motor.
+
 ## Consideraciones
 
-- El `serverSeed` activo se guarda cifrado en reposo (TODO fase 2) y nunca se envía al cliente.
+- El `serverSeed` activo se guarda **cifrado con AES-256-GCM** (`SERVER_SEED_ENCRYPTION_KEY`), con el id del par como dato autenticado, y nunca se envía al cliente. Al revelarlo se guarda en claro.
 - Cambiar `clientSeed` fuerza rotación del par (evita ajustar la semilla al ver resultados).
+- **No se puede rotar con una ronda abierta**: revelar el seed revelaría la carta tapada y las siguientes del zapato (`409 ROUND_IN_PROGRESS`).
 - Las tragamonedas usan el mismo flujo; el RTP se valida con un simulador (Fase 4), no con confianza.
 - Esto demuestra _equidad verificable_, no sustituye una certificación de laboratorio; es una demostración de portafolio con fichas virtuales.
 
