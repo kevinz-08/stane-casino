@@ -1,15 +1,28 @@
+import type { AuthResponseDto, UserDto } from '@casino/shared';
 import { create } from 'zustand';
 
+export type SessionStatus = 'unknown' | 'anonymous' | 'authenticated';
+
 interface SessionState {
-  userId: string | null;
-  /** Chip balance as a decimal string (bigint over the wire). Display only: the server is the authority. */
+  /** `unknown` until the first refresh attempt on page load settles. */
+  status: SessionStatus;
+  user: UserDto | null;
+  /** Short-lived access token, kept in memory only (never in localStorage). */
+  accessToken: string | null;
+  /** Chip balance as a decimal string (bigint over the wire). Display only: the server decides. */
   balance: string | null;
-  setSession: (userId: string | null, balance: string | null) => void;
+  signIn: (auth: AuthResponseDto) => void;
+  setBalance: (balance: string) => void;
+  signOut: () => void;
 }
 
-// TODO(fase-1): hydrate from the API; never trust this for anything but rendering.
 export const useSessionStore = create<SessionState>((set) => ({
-  userId: null,
+  status: 'unknown',
+  user: null,
+  accessToken: null,
   balance: null,
-  setSession: (userId, balance) => set({ userId, balance }),
+  signIn: (auth) =>
+    set({ status: 'authenticated', user: auth.user, accessToken: auth.accessToken }),
+  setBalance: (balance) => set({ balance }),
+  signOut: () => set({ status: 'anonymous', user: null, accessToken: null, balance: null }),
 }));
